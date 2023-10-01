@@ -13,6 +13,7 @@ class Passenger:
         self.request_time = request_time
         self.assign_time = assign_time
         self.wait_time = wait_time
+        self.travel_time = travel_time
         self.arrival_time = arrival_time
         self.leave_system = leave_system
 

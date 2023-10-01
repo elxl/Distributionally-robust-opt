@@ -8,15 +8,15 @@ import random, math
 import numpy as np
 import gurobipy as gb
 from datetime import datetime, timedelta
-from parameters import start_timestamp, end_timestamp, start_time, matching_window, \
-                        maximum_waiting_time, predecessor, road_distance_matrix, average_speed, BIG_M
+from parameters import Parameters
 from structures import Passenger, Vehicle
 
 from rsome import dro, ro
-from rsome import norm
+from rsome import norm, square
 from rsome import E
 from rsome import grb_solver as grb
 
+params = Parameters()
 
 def initialize_demand(demand_data, zone_to_road_node_dict, zone_index_id_dict):
     """
@@ -35,7 +35,7 @@ def initialize_demand(demand_data, zone_to_road_node_dict, zone_index_id_dict):
 
     for i in range(demand_data.shape[0]):
         request_time = datetime.strptime(demand_data.loc[i,"pu_time"], "%Y-%m-%d %H:%M:%S")
-        if (request_time >= start_timestamp) & (request_time < end_timestamp):
+        if (request_time >= params.start_timestamp) & (request_time < params.end_timestamp):
             pickup_zone = zone_index_id_dict[int(demand_data.loc[i, "pu_zone"])]
             dropoff_zone = zone_index_id_dict[int(demand_data.loc[i, "do_zone"])]
             while True:
@@ -61,7 +61,7 @@ def initialize_vehicle(fleet_size, n, zone_to_road_node_dict):
     vehicle_list = []
     vehicle_id_dict = dict()
     vehicle_ind = 0
-    init_avail_time = datetime(2019,6,27,start_time[0],0,0)
+    init_avail_time = datetime(2019,6,27,params.start_time[0],0,0)
     random.seed(2023)
 
     zone_vehicle_number = int(math.floor(fleet_size / n)) # number of vehicles in each zone
@@ -93,9 +93,9 @@ def matching(vehicles, demands):
         for dem in demands:
             dem_id = dem.id
             dem_loc = dem.origin
-            pick_distance = road_distance_matrix[veh_loc, dem_loc]
-            pickup_time = pick_distance / average_speed
-            if pickup_time * 3600 <= maximum_waiting_time:
+            pick_distance = params.road_distance_matrix[veh_loc, dem_loc]
+            pickup_time = pick_distance / params.average_speed
+            if pickup_time * 3600 <= params.maximum_waiting_time:
                 pickup_dist[(veh_id, dem_id)] = pick_distance
 
     veh_dict = {veh.id: [] for veh in vehicles}
@@ -106,29 +106,29 @@ def matching(vehicles, demands):
         dem_dict[i[1]].append(i)
 
     # Matching optimization
-        m = gb.Model("matching")
-        m.setParam('OutputFlag', 0)
-        m.setParam('TimeLimit', 10)
-        m.setParam('MIPGap', 0.01)
+    m = gb.Model("matching")
+    m.setParam('OutputFlag', 0)
+    m.setParam('TimeLimit', 10)
+    m.setParam('MIPGap', 0.01)
 
-        # Decision variables
-        x = {}
-        for i in pickup_dist:
-            x[i] = m.addVar(vtype='B', name="matching_" + str(i))
+    # Decision variables
+    x = {}
+    for i in pickup_dist:
+        x[i] = m.addVar(vtype='B', name="matching_" + str(i))
 
-        # Decision variables for unserved matching
-        y = {}
-        for dem in dem_dict:
-            y[dem] = m.addVar(vtype='B', name="unserved_" + str(dem))
+    # Decision variables for unserved matching
+    y = {}
+    for dem in dem_dict:
+        y[dem] = m.addVar(vtype='B', name="unserved_" + str(dem))
 
-        # Constraints
-        m.addConstrs(gb.quicksum(x[i] for i in veh_dict[veh]) <= 1 for veh in veh_dict)
-        m.addConstrs(gb.quicksum(x[i] for i in dem_dict[dem]) + y[dem] == 1 for dem in dem_dict)
+    # Constraints
+    m.addConstrs(gb.quicksum(x[i] for i in veh_dict[veh]) <= 1 for veh in veh_dict)
+    m.addConstrs(gb.quicksum(x[i] for i in dem_dict[dem]) + y[dem] == 1 for dem in dem_dict)
 
-        # Objectives
-        m.setObjective(BIG_M * gb.quicksum(y[i] for i in dem_dict)
-                       + gb.quicksum(x[i] * pickup_dist[i] for i in pickup_dist), gb.GRB.MINIMIZE)
-        m.optimize()
+    # Objectives
+    m.setObjective(params.big_M * gb.quicksum(y[i] for i in dem_dict)
+                    + gb.quicksum(x[i] * pickup_dist[i] for i in pickup_dist), gb.GRB.MINIMIZE)
+    m.optimize()
 
     # Get matched vehicle and passenger as well as the pick up distance
     matching_list = []
@@ -150,17 +150,17 @@ def get_current_location(matching_time, veh, demand_id_dict):
     """
     pax = demand_id_dict[veh.served_passenger[-1]]
 
-    if matching_time - timedelta(seconds=matching_window) < pax.assign_time <= matching_time:
+    if matching_time - timedelta(seconds=params.matching_window) < pax.assign_time <= matching_time:
         return veh.current_location
     else:
-        vehicle_travel_time = matching_time.timestamp - pax.request_time.timestamp - pax.wait_time
+        vehicle_travel_time = datetime.timestamp(matching_time) - datetime.timestamp(pax.request_time) - pax.wait_time
         veh_start_loc = pax.origin
         veh_end_loc = pax.destination
         trip_path = []
         temp_node = veh_end_loc
         # Path of vehicle
         while True:
-            pred = int(predecessor[veh_start_loc,temp_node])
+            pred = int(params.predecessor[veh_start_loc,temp_node])
             trip_path.insert(0, pred)
             if pred == veh_start_loc:
                 break
@@ -172,8 +172,8 @@ def get_current_location(matching_time, veh, demand_id_dict):
     for i in range(len(trip_path) - 1):
         start_node = trip_path[i]
         end_node = trip_path[i+1]
-        segment_dist = road_distance_matrix[start_node,end_node]
-        segment_time = segment_dist / average_speed * 3600
+        segment_dist = params.road_distance_matrix[start_node,end_node]
+        segment_time = segment_dist / params.average_speed * 3600
         travel_time += segment_time
         if travel_time >= vehicle_travel_time:
             return end_node
@@ -432,7 +432,7 @@ def robust_model_function(μ, σ, ρ, Γ, V1, O1, P, Q, d, a, b, β, γ):
     w = model.dvar()
 
     # Positive variable constraints
-    model.st(x >= 0,O >= 0,S >= 0,V >=0)
+    model.st(x >= 0,y >= 0, O >= 0,S >= 0,V >=0)
 
     # Uncertainty variable
     zeta = model.rvar((n, K))
@@ -442,24 +442,19 @@ def robust_model_function(μ, σ, ρ, Γ, V1, O1, P, Q, d, a, b, β, γ):
     model.st(O[:, 0] == O1)
 
     # Uncertainty
-    z_set = (abs(zeta) <= ρ, abs(zeta @ σ) <= Γ)
-
-    model.st((μ + zeta * σ >= 0).forall(z_set))
+    z_set = (abs(zeta) <= ρ, abs((zeta * σ).sum(axis=0)) <= Γ, μ + zeta * σ >= 0)
 
     # Set constraints related to state transitions (1,2,3)
-    # model.st(S[i,k] == V[i,k] + sum(x[j,i,k] for j in range(n)) - sum(x[i,j,k] for j in range(n)) for i in range(n) for k in range(K))
     model.st(S == V + x.sum(axis=0) - x.sum(axis=1))
-    # model.st(V[i,k+1] == S[i,k] - sum(y[j,i,k] for j in range(n)) + sum(Q[j,i,k] * O[j,k] for j in range(n)) for i in range(n) for k in range(K-1))
-    model.st(V[:,1:K] == S - y[:,:,:(K-1)].sum(axis=0) + (Q * O)[:,:,:(K-1)].sum(axis=0))
-    # model.st(O[i,k+1] == sum(y[j,i,k] for j in range(n)) + sum(P[j,i,k] * O[j,k] for j in range(n)) for i in range(n) for k in range(K-1))
-    model.st(O[:,1:K] == y[:,:,:(K-1)].sum(axis=0) + (P * O)[:,:,:(K-1)].sum(axis=0))    
+    model.st(V[i,k+1] == S[i,k] - y[:,i,k].sum() + (Q[:,i,k] * O[:,k]).sum() for i in range(n) for k in range(K-1))
+    model.st(O[i,k+1] == y[:,i,k].sum() + (P[:,i,k] * O[:,k]).sum() for i in range(n) for k in range(K-1)) 
+
+    model.st(x.sum(axis=1) <= V)
 
     # Set rebalancing constraint (4)
-    # model.st(int(a[i,j,k]) * x[i,j,k] == 0 for i in range(n) for j in range(n) for k in range(K))
     model.st(a.astype(int) * x == 0)
 
     # Set surplus vehicle / passenger constraint (6, 7, 8, 9)
-    # model.st(sum(y[j,i,k] for j in range(n)) <= S[i,k] for i in range(n) for k in range(K))
     model.st((y.sum(axis=0) <= S))
     model.st((y.sum(axis=0) <= μ + zeta * σ).forall(z_set))
 
@@ -471,7 +466,7 @@ def robust_model_function(μ, σ, ρ, Γ, V1, O1, P, Q, d, a, b, β, γ):
                 + γ * (μ + zeta * σ - y.sum(axis=1)).sum() <= w).forall(z_set))
     
     model.min(w)
-    model.solve(grb)
+    model.solve(grb, display=False)
 
     x_robust = x.get()
 
@@ -496,7 +491,7 @@ def robust_model_function_interval(μ, lb, ub, Γ, V1, O1, P, Q, d, a, b, β, γ
     w = model.dvar()
 
     # Positive variable constraints
-    model.st(x >= 0,O >= 0,S >= 0,V >=0)
+    model.st(x >= 0, y >= 0,O >= 0,S >= 0,V >=0)
 
     # Uncertainty variable
     r = model.rvar((n, K))
@@ -506,15 +501,17 @@ def robust_model_function_interval(μ, lb, ub, Γ, V1, O1, P, Q, d, a, b, β, γ
     model.st(O[:, 0] == O1)
 
     # Uncertainty
-    z_set = (r <= ub, r>= lb, r>=0, abs((r-μ).sum()) <= Γ)
+    z_set = (r <= ub, r>= lb, r>=0, abs((r-μ).sum(axis=0)) <= Γ)
 
     # Set constraints related to state transitions (1,2,3)
     # model.st(S[i,k] == V[i,k] + sum(x[j,i,k] for j in range(n)) - sum(x[i,j,k] for j in range(n)) for i in range(n) for k in range(K))
     model.st(S == V + x.sum(axis=0) - x.sum(axis=1))
-    # model.st(V[i,k+1] == S[i,k] - sum(y[j,i,k] for j in range(n)) + sum(Q[j,i,k] * O[j,k] for j in range(n)) for i in range(n) for k in range(K-1))
-    model.st(V[:,1:K] == S - y[:,:,:(K-1)].sum(axis=0) + (Q * O)[:,:,:(K-1)].sum(axis=0))
-    # model.st(O[i,k+1] == sum(y[j,i,k] for j in range(n)) + sum(P[j,i,k] * O[j,k] for j in range(n)) for i in range(n) for k in range(K-1))
-    model.st(O[:,1:K] == y[:,:,:(K-1)].sum(axis=0) + (P * O)[:,:,:(K-1)].sum(axis=0))    
+    model.st(V[i,k+1] == S[i,k] - y[:,i,k].sum() + (Q[:,i,k] * O[:,k]).sum() for i in range(n) for k in range(K-1))
+    # model.st(V[:,1:K] == S[:,:K-1] - y[:,:,:(K-1)].sum(axis=0) + (Q * O)[:,:,:(K-1)].sum(axis=0))
+    model.st(O[i,k+1] == y[:,i,k].sum() + (P[:,i,k] * O[:,k]).sum() for i in range(n) for k in range(K-1))
+    # model.st(O[:,1:K] == y[:,:,:(K-1)].sum(axis=0) + (P * O)[:,:,:(K-1)].sum(axis=0))    
+
+    model.st(x.sum(axis=1) <= V)
 
     # Set rebalancing constraint (4)
     # model.st(int(a[i,j,k]) * x[i,j,k] == 0 for i in range(n) for j in range(n) for k in range(K))
@@ -533,14 +530,121 @@ def robust_model_function_interval(μ, lb, ub, Γ, V1, O1, P, Q, d, a, b, β, γ
                 + γ * (r - y.sum(axis=1)).sum() <= w).forall(z_set))
     
     model.min(w)
-    model.solve(grb)
+    model.solve(grb, display=False)
 
     x_robust = x.get()
 
     return x_robust
 
-def Distributionally_robust_model(data, V1, O1, P, Q, d, a, b, 𝛽, γ):
+def distributionally_robust_model(μ, σ, lb, ub, V1, O1, P, Q, d, a, b, β, γ):
     """
     Distributional robust optimization
     """
+    n = d.shape[1]
+    K = μ.shape[1]
+
+    model = dro.Model()
+
+    # Decision variables
+    x = model.dvar((n, n, K))
+    y = model.dvar((n, n, K))
+    O = model.dvar((n, K))
+    V = model.dvar((n, K))
+    S = model.dvar((n, K))
+    w = model.dvar()
+
+    # Uncertainty variable
+    r = model.rvar((n, K))
+    u = model.rvar((n+1, K)) # auxiliary vector
+
+    # Uncertainty
+    z_set = model.ambiguity()
+    z_set.suppset(r >= lb, r <= ub, r>=0,
+                  square(r-μ) <= u[:-1,:],
+                  square((r-μ).sum(axis=0)) <= u[-1,:])
+    z_set.exptset(E(r) == μ,
+                  E(u[:-1,:]) <= σ**2,
+                  E(u[-1,:]) <= σ.sum(axis=0))
     
+    # Positive variable constraints
+    model.st(x >= 0, y >= 0,O >= 0,S >= 0,V >=0)
+
+    # Set constraints to force initial position of occupied and vacant vehicles
+    model.st(V[:, 0] == V1)
+    model.st(O[:, 0] == O1)
+
+    # Set constraints related to state transitions (1,2,3)
+    model.st(S == V + x.sum(axis=0) - x.sum(axis=1))
+    model.st(V[i,k+1] == S[i,k] - y[:,i,k].sum() + (Q[:,i,k] * O[:,k]).sum() for i in range(n) for k in range(K-1))
+    model.st(O[i,k+1] == y[:,i,k].sum() + (P[:,i,k] * O[:,k]).sum() for i in range(n) for k in range(K-1))
+
+    model.st(x.sum(axis=1) <= V)
+
+    # Set rebalancing constraint (4)
+    model.st(a.astype(int) * x == 0)
+
+    # Set surplus vehicle / passenger constraint (6, 7, 8, 9)
+    model.st(y.sum(axis=0) <= S)
+    model.st(y.sum(axis=0) <= r)
+
+    # Set matching constraint (10)
+    model.st(b.astype(int) * y == 0)
+
+    model.st((x * d).sum()
+                + 𝛽 * (y * np.transpose(d, [1,0,2])).sum()
+                + γ * (r - y.sum(axis=1)).sum() <= w)
+    
+    model.minsup(E(w), z_set)
+    model.solve(grb, display=False)
+
+    x_robust = x.get()
+
+    return x_robust
+
+    
+def optimization(r, V1, O1, P, Q, n, K, a, b, d, β, γ):
+
+    model = ro.Model()
+
+    # Decision variables
+    x = model.dvar((n, n, K))
+    y = model.dvar((n, n, K))
+    O = model.dvar((n, K))
+    V = model.dvar((n, K))
+    S = model.dvar((n, K))
+    T = model.dvar((n, K))
+
+    # Positive variable constraints
+    model.st(x >= 0,y >= 0, O >= 0,S >= 0,V >=0, T>=0)
+
+    # Set constraints to force initial position of occupied and vacant vehicles
+    model.st(V[:, 0] == V1)
+    model.st(O[:, 0] == O1)
+
+    # Set constraints related to state transitions (1,2,3)
+    model.st(S == V + x.sum(axis=0) - x.sum(axis=1))
+    model.st(V[i,k+1] == S[i,k] - y[:,i,k].sum() + (Q[:,i,k] * O[:,k]).sum() for i in range(n) for k in range(K-1))
+    model.st(O[i,k+1] == y[:,i,k].sum() + (P[:,i,k] * O[:,k]).sum() for i in range(n) for k in range(K-1))
+
+    model.st(x.sum(axis=1) <= V)
+
+    # Set rebalancing constraint (4)
+    model.st(a.astype(int) * x == 0)
+
+    # Set surplus vehicle / passenger constraint (6, 7, 8, 9)
+    model.st(y.sum(axis=0) <= S)
+    model.st(y.sum(axis=0) <= r)
+    model.st(T = r - y.sum(axis=1)
+             )
+    # Set matching constraint (10)
+    model.st(b.astype(int) * y == 0)
+
+    model.min((x * d).sum()
+               + 𝛽 * (y * np.transpose(d, [1,0,2])).sum()
+               + γ * T.sum())
+    
+    model.solve(grb, display=False)
+
+    x_value = x.get()
+
+    return x_value    
