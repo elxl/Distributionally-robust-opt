@@ -5,7 +5,8 @@ Created on Wed Sep 27 10:27:05 2023
 @author: 11481
 """
 
-import random, math, pickle
+import random, math, pickle, time, os
+import argparse
 import numpy as np
 from parameters import Parameters
 from functions import initialize_demand, initialize_vehicle, get_current_location, matching, robust_model_function, robust_model_function_interval, distributionally_robust_model, optimization
@@ -13,12 +14,35 @@ from collections import defaultdict
 from datetime import datetime, timedelta
 
 
+parser = argparse.ArgumentParser(description='reb-opt')
+
+parser.add_argument("--engine", type=str, default="true_demand", help="type of optimization engine")
+parser.add_argument("--CI", type=int, default=95, help="confidence interval for calculating range")
+
 fleet_size = 2000
-matching_engine = "graph_lstm_dro"
-output_path = "output/historical_normal_0627/"
-ρ_list = [3]
-Γ_list = [5]
-params = Parameters()
+args = parser.parse_args()
+matching_engine = args.engine
+if matching_engine == "graph_lstm_interval":
+    output_path = "output/graph_lstm_poisson_0627/"
+    ρ_list = [3]
+    Γ_list = [0,1,2,3,4,5,6,7,8,9,10]
+elif matching_engine == "graph_lstm_dro":
+    output_path = "output/graph_lstm_poisson_0627_dro/"
+    ρ_list = [3]
+    Γ_list = [5]    
+elif matching_engine == "historical_interval":
+    output_path = "output/historical_poisson_0627/"
+    ρ_list = [3]
+    Γ_list = [0,1,2,3,4,5,6,7,8,9,10]
+elif matching_engine == "true_demand":
+    output_path = "output/true_demand_0627/"
+    ρ_list = [3]
+    Γ_list = [5]
+
+if not os.path.exists(output_path):
+    os.makedirs(output_path)
+
+params = Parameters(args.CI)
 
 for ρ in ρ_list:
     for Γ in Γ_list:
@@ -58,8 +82,8 @@ for ρ in ρ_list:
             print("Rebalancing Phase ")
             print(simulation_time)
     
-            K_sub = end_time_index - time_index + 1
-            node = 30
+            K_sub = end_time_index - time_index
+            node = 63
             a_sub = params.a[:node,:node,time_index:end_time_index] # if traveling time is bigger than rebalancing threshold
             b_sub = params.b[:node,:node,time_index:end_time_index] # if traveling time is bigger than maximum waiting time
             d_sub = params.d[:node,:node,time_index:end_time_index] # zone centroids distance 
@@ -87,7 +111,7 @@ for ρ in ρ_list:
                 μ = params.demand_mean[:, time_index:end_time_index] # predicted mean
                 lb = params.demand_lb[:, time_index:end_time_index]
                 ub = params.demand_ub[:, time_index:end_time_index]
-                rebalancing_decision = robust_model_function_interval(μ, lb, ub, Γ, V_init, O_init, P_matrix, Q_matrix, d_sub, a_sub, b_sub, params.β, params.γ)            
+                rebalancing_decision = robust_model_function_interval(μ, lb, ub, Γ, V_init, O_init, P_matrix, Q_matrix, d_sub, a_sub, b_sub, params.β, params.γ)     
             elif matching_engine == "true_demand":
                 r = params.true_demand[:, time_index:end_time_index]
                 rebalancing_decision = optimization(r, V_init, O_init, P_matrix, Q_matrix, params.n, K_sub, a_sub, b_sub, d_sub, params.β, params.γ)
@@ -236,10 +260,13 @@ for ρ in ρ_list:
     
         print(f"Unserved rate: {pax_leave_number / total_pax_number}")
     
-        if matching_engine=="true_demand":
+        if matching_engine == "true_demand":
             with open(output_path + matching_engine + "_" + str(params.start_time[0]) + "_"*str(params.end_time[0]) + "_0627_results.json","w") as f:
                 pickle.dump(output, f)
             break
-        else:
-            with open(output_path + str(ρ) + "_" + str(Γ) + "_" + str(params.start_time[0]) + "_" + str(params.end_time[0]) + "_results_95.json","w") as f:
+        elif matching_engine == "graph_lstm_dro":
+            with open(output_path + str(params.start_time[0]) + "_" + str(params.end_time[0]) + f"_results_{args.CI}.json","w") as f:
                 pickle.dump(output, f)
+        else:
+            with open(output_path + str(ρ) + "_" + str(Γ) + "_" + str(params.start_time[0]) + "_" + str(params.end_time[0]) + f"_results_{args.CI}.json","w") as f:
+                pickle.dump(output, f)                

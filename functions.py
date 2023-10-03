@@ -634,7 +634,7 @@ def optimization(r, V1, O1, P, Q, n, K, a, b, d, β, γ):
     # Set surplus vehicle / passenger constraint (6, 7, 8, 9)
     model.st(y.sum(axis=0) <= S)
     model.st(y.sum(axis=0) <= r)
-    model.st(T = r - y.sum(axis=1)
+    model.st(T == r - y.sum(axis=1)
              )
     # Set matching constraint (10)
     model.st(b.astype(int) * y == 0)

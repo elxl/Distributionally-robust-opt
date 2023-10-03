@@ -5,13 +5,13 @@ from datetime import datetime
 
 
 class Parameters():
-    def __init__(self):
+    def __init__(self, ci=50):
         
         self.start_time = (7, 0) # Hour, Minute
         self.end_time = (9, 0) # Hour, Minute
         
         self.time_interval_length = 300 # Seconds
-        self.rebalancing_time_length = 1200 # 6 time intervals
+        self.rebalancing_time_length = 1800 # 6 time intervals
         self.matching_window = 30 # Seconds
         data1 = pd.read_csv('data/NYC/road_network/distance.csv', header=None) / 1609.34
         self.road_distance_matrix = data1.values
@@ -60,10 +60,10 @@ class Parameters():
             self.zone_index_id_dict[self.zone_index_id[i,1]] = self.zone_index_id[i,0]
 
         # Demand information used for solving optimization problems
-        self.demand_mean = np.load("historical/0627_normal_mean.npy")
-        self.demand_std = np.load("historical/0627_normal_std.npy")
-        self.demand_lb = np.load("historical/0627_normal_95_lb.npy")
-        self.demand_ub = np.load("historical/0627_normal_95_ub.npy")
+        self.demand_mean = np.load("historical/0627_poisson_mean.npy")
+        self.demand_std = np.load("historical/0627_poisson_std.npy")
+        self.demand_lb = np.load(f"historical/0627_poisson_{ci}_lb.npy")
+        self.demand_ub = np.load(f"historical/0627_poisson_{ci}_ub.npy")
         self.true_demand = June_27_data.loc[:, ['zone','bin','demand']].pivot(index='zone',columns='bin',values='demand').values
             
         # Demand information used for solving optimizaiton problems
@@ -103,7 +103,7 @@ class Parameters():
         self.graph_lstm_var = graph_lstm_var.loc[:, ['zone','bin','demand']].pivot(index='zone',columns='bin',values='demand').values
 
         # Lower and upper bound from neural network
-        graph_lstm_lb = pd.read_csv("graph_lstm/0627_poisson_95_lb.csv")
+        graph_lstm_lb = pd.read_csv(f"graph_lstm/0627_poisson_{ci}_lb.csv")
         self.graph_lstm_lb = graph_lstm_lb.loc[:, ['zone','bin','demand']].pivot(index='zone',columns='bin',values='demand').values
-        graph_lstm_ub = pd.read_csv("graph_lstm/0627_poisson_95_ub.csv")
+        graph_lstm_ub = pd.read_csv(f"graph_lstm/0627_poisson_{ci}_ub.csv")
         self.graph_lstm_ub = graph_lstm_ub.loc[:, ['zone','bin','demand']].pivot(index='zone',columns='bin',values='demand').values
