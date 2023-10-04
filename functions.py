@@ -65,7 +65,7 @@ def initialize_vehicle(fleet_size, n, zone_to_road_node_dict):
     random.seed(2023)
 
     zone_vehicle_number = int(math.floor(fleet_size / n)) # number of vehicles in each zone
-    for i in range(n):
+    for i in zone_to_road_node_dict.keys():
         road_node_list = zone_to_road_node_dict[i]
         vehicle_loc_list = random.choices(road_node_list, k=zone_vehicle_number) # sample number of vehicles locations in zone
         for loc in vehicle_loc_list:
@@ -161,7 +161,8 @@ def get_current_location(matching_time, veh, demand_id_dict):
         # Path of vehicle
         while True:
             pred = int(params.predecessor[veh_start_loc,temp_node])
-            trip_path.insert(0, pred)
+            if pred in params.road_node:
+                trip_path.insert(0, pred)
             if pred == veh_start_loc:
                 break
 

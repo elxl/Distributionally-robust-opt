@@ -74,19 +74,18 @@ for ρ in ρ_list:
                 veh_loc = veh.current_location
                 vehicle_zone = params.road_node_to_zone_dict[veh_loc]
                 if veh.occupied:
-                    O_init[vehicle_zone] += 1 # zone index from 0 to 62
+                    O_init[params.zones_index.index(vehicle_zone)] += 1 # zone index from 0 to 62
                 else:
-                    V_init[vehicle_zone] += 1
+                    V_init[params.zones_index.index(vehicle_zone)] += 1
                     zone_vacant_veh_dict[vehicle_zone].append(veh.id)
     
             print("Rebalancing Phase ")
             print(simulation_time)
     
             K_sub = end_time_index - time_index
-            node = 63
-            a_sub = params.a[:node,:node,time_index:end_time_index] # if traveling time is bigger than rebalancing threshold
-            b_sub = params.b[:node,:node,time_index:end_time_index] # if traveling time is bigger than maximum waiting time
-            d_sub = params.d[:node,:node,time_index:end_time_index] # zone centroids distance 
+            a_sub = params.a[:,:,time_index:end_time_index] # if traveling time is bigger than rebalancing threshold
+            b_sub = params.b[:,:,time_index:end_time_index] # if traveling time is bigger than maximum waiting time
+            d_sub = params.d[:,:,time_index:end_time_index] # zone centroids distance 
     
             if matching_engine == "graph_lstm":
                 μ = params.graph_lstm_mean[:, time_index:end_time_index] # predicted mean
@@ -98,11 +97,11 @@ for ρ in ρ_list:
                 ub = params.graph_lstm_ub[:, time_index:end_time_index]
                 rebalancing_decision = robust_model_function_interval(μ, lb, ub, Γ, V_init, O_init, P_matrix, Q_matrix, d_sub, a_sub, b_sub, params.β, params.γ)   
             elif matching_engine == "graph_lstm_dro":
-                μ = params.graph_lstm_mean[:node, time_index:end_time_index] # predicted mean
-                σ = params.graph_lstm_var[:node, time_index:end_time_index] # predicted standard deviation
-                lb = params.graph_lstm_lb[:node, time_index:end_time_index]
-                ub = params.graph_lstm_ub[:node, time_index:end_time_index]
-                rebalancing_decision = distributionally_robust_model(μ, σ, lb, ub, V_init[:node], O_init[:node], P_matrix[:node,:node,:], Q_matrix[:node,:node,:], d_sub, a_sub, b_sub, params.β, params.γ)                          
+                μ = params.graph_lstm_mean[:, time_index:end_time_index] # predicted mean
+                σ = params.graph_lstm_var[:, time_index:end_time_index] # predicted standard deviation
+                lb = params.graph_lstm_lb[:, time_index:end_time_index]
+                ub = params.graph_lstm_ub[:, time_index:end_time_index]
+                rebalancing_decision = distributionally_robust_model(μ, σ, lb, ub, V_init, O_init, P_matrix, Q_matrix, d_sub, a_sub, b_sub, params.β, params.γ)                          
             # elif matching_engine == "historical":
             #     μ = demand_mean[:, time_index:end_time_index]
             #     σ = demand_std[:, time_index:end_time_index]
@@ -125,14 +124,14 @@ for ρ in ρ_list:
                     if rebalancing_veh_number <= 0:
                         continue
                     #Random.seed!(2020)
-                    rebalancing_veh_list = random.sample(zone_vacant_veh_dict[i], rebalancing_veh_number)
+                    rebalancing_veh_list = random.sample(zone_vacant_veh_dict[params.zones_index[i]], rebalancing_veh_number)
                     for veh_id in rebalancing_veh_list:
                         veh = vehicle_id_dict[veh_id]
                         random_number = 0
                         Flag = False
                         #Random.seed!(2020)
                         while True:
-                            dest_node = random.choice(params.zone_to_road_node_dict[j])
+                            dest_node = random.choice(params.zone_to_road_node_dict[params.zones_index[j]])
                             rebalancing_dist = params.road_distance_matrix[veh.current_location, dest_node]
                             rebalancing_time = (rebalancing_dist / params.average_speed) * 3600
                             if rebalancing_time <= params.time_interval_length:
@@ -261,12 +260,12 @@ for ρ in ρ_list:
         print(f"Unserved rate: {pax_leave_number / total_pax_number}")
     
         if matching_engine == "true_demand":
-            with open(output_path + matching_engine + "_" + str(params.start_time[0]) + "_"*str(params.end_time[0]) + "_0627_results.json","w") as f:
+            with open(output_path + matching_engine + "_" + str(params.start_time[0]) + "_"*str(params.end_time[0]) + "_0627_results.json","wb") as f:
                 pickle.dump(output, f)
             break
         elif matching_engine == "graph_lstm_dro":
-            with open(output_path + str(params.start_time[0]) + "_" + str(params.end_time[0]) + f"_results_{args.CI}.json","w") as f:
+            with open(output_path + str(params.start_time[0]) + "_" + str(params.end_time[0]) + f"_results_{args.CI}.json","wb") as f:
                 pickle.dump(output, f)
         else:
-            with open(output_path + str(ρ) + "_" + str(Γ) + "_" + str(params.start_time[0]) + "_" + str(params.end_time[0]) + f"_results_{args.CI}.json","w") as f:
+            with open(output_path + str(ρ) + "_" + str(Γ) + "_" + str(params.start_time[0]) + "_" + str(params.end_time[0]) + f"_results_{args.CI}.json","wb") as f:
                 pickle.dump(output, f)                
