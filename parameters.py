@@ -69,15 +69,18 @@ class Parameters():
             self.centroid_to_node_dict[self.zone_centriod_node[i,0]] = self.zone_centriod_node[i,1]
 
         # Demand information used for solving optimization problems
-        self.demand_mean = np.load("historical/0627_poisson_mean.npy")[nodes_index,:]
-        self.demand_std = np.load("historical/0627_poisson_std.npy")[nodes_index,:]
-        self.demand_lb = np.load(f"historical/0627_poisson_{ci}_lb.npy")[nodes_index,:]
-        self.demand_ub = np.load(f"historical/0627_poisson_{ci}_ub.npy")[nodes_index,:]
+        # self.demand_mean = np.load("historical/0627_poisson_mean.npy")[nodes_index,:]
+        # self.demand_std = np.load("historical/0627_poisson_std.npy")[nodes_index,:]
+        # self.demand_lb = np.load(f"historical/0627_poisson_{ci}_lb.npy")[nodes_index,:]
+        # self.demand_ub = np.load(f"historical/0627_poisson_{ci}_ub.npy")[nodes_index,:]
+        self.demand_mean = np.mean(self.data_points, axis=2)
+        self.demand_std = np.std(self.data_points, axis=2)
         self.true_demand = June_27_data.loc[:, ['zone','bin','demand']].pivot(index='zone',columns='bin',values='demand').values
             
         # Demand information used for solving optimizaiton problems
         self.demand_data = pd.read_csv("data/NYC/demand/fhv_records_06272019.csv")
         self.demand_data = self.demand_data[(self.demand_data['pu_zone'].isin(nodes) & (self.demand_data['do_zone'].isin(nodes)))].reset_index(drop=True)
+        self.hist_avg_demand = June_27_data.loc[:, ['zone','bin','historical_average']].pivot(index='zone',columns='bin',values='historical_average').values
         
         # Problem Parameters
         self.β = 1
@@ -87,10 +90,10 @@ class Parameters():
         self.maximum_rebalancing_time = self.time_interval_length
         self.big_M = 1e5
         
-        d = np.load("data/NYC/distance_matrix.npy")[nodes_index,][:,nodes_index] # Zone centroid distances in miles
+        d = np.load("data/NYC/distance_matrix.npy")[nodes_index,:][:,nodes_index] # Zone centroid distances in miles
         self.d = np.repeat(d[:, :, np.newaxis], K, axis=2) # Repeat d to create a n x n x K matrix
         # Hourly travel time to 288 time intervals
-        w_hourly = np.load("data/NYC/hourly_tt.npy")[nodes_index,][:,nodes_index]
+        w_hourly = np.load("data/NYC/hourly_tt.npy")[nodes_index,:][:,nodes_index]
         a = np.repeat(w_hourly[:,:,0][:, :, np.newaxis], 12, axis=2)
         for i in range(1,24):
             b = np.repeat(w_hourly[:,:,i][:, :, np.newaxis], 12, axis=2)

@@ -16,10 +16,10 @@ from datetime import datetime, timedelta
 
 parser = argparse.ArgumentParser(description='reb-opt')
 
-parser.add_argument("--engine", type=str, default="true_demand", help="type of optimization engine")
+parser.add_argument("--engine", type=str, default="graph_lstm_interval", help="type of optimization engine")
 parser.add_argument("--CI", type=int, default=95, help="confidence interval for calculating range")
 
-fleet_size = 2000
+fleet_size = 1000
 args = parser.parse_args()
 matching_engine = args.engine
 if matching_engine == "graph_lstm_interval":
@@ -33,7 +33,11 @@ elif matching_engine == "graph_lstm_dro":
 elif matching_engine == "historical_interval":
     output_path = "output/historical_poisson_0627/"
     ρ_list = [3]
-    Γ_list = [0,1,2,3,4,5,6,7,8,9,10]
+    Γ_list = [0]
+elif matching_engine == "historical":
+    output_path = "output/historical_demand_0627/"
+    ρ_list = [3]
+    Γ_list = [5]    
 elif matching_engine == "true_demand":
     output_path = "output/true_demand_0627/"
     ρ_list = [3]
@@ -110,7 +114,10 @@ for ρ in ρ_list:
                 μ = params.demand_mean[:, time_index:end_time_index] # predicted mean
                 lb = params.demand_lb[:, time_index:end_time_index]
                 ub = params.demand_ub[:, time_index:end_time_index]
-                rebalancing_decision = robust_model_function_interval(μ, lb, ub, Γ, V_init, O_init, P_matrix, Q_matrix, d_sub, a_sub, b_sub, params.β, params.γ)     
+                rebalancing_decision = robust_model_function_interval(μ, lb, ub, Γ, V_init, O_init, P_matrix, Q_matrix, d_sub, a_sub, b_sub, params.β, params.γ)   
+            elif matching_engine == "historical":
+                r = params.demand_mean[:, time_index:end_time_index]
+                rebalancing_decision = optimization(r, V_init, O_init, P_matrix, Q_matrix, params.n, K_sub, a_sub, b_sub, d_sub, params.β, params.γ)
             elif matching_engine == "true_demand":
                 r = params.true_demand[:, time_index:end_time_index]
                 rebalancing_decision = optimization(r, V_init, O_init, P_matrix, Q_matrix, params.n, K_sub, a_sub, b_sub, d_sub, params.β, params.γ)
@@ -259,8 +266,8 @@ for ρ in ρ_list:
     
         print(f"Unserved rate: {pax_leave_number / total_pax_number}")
     
-        if matching_engine == "true_demand":
-            with open(output_path + matching_engine + "_" + str(params.start_time[0]) + "_"*str(params.end_time[0]) + "_0627_results.json","wb") as f:
+        if matching_engine == "true_demand" or matching_engine == "historical":
+            with open(output_path + matching_engine + "_" + str(params.start_time[0]) + "_" + str(params.end_time[0]) + "_0627_results.json","wb") as f:
                 pickle.dump(output, f)
             break
         elif matching_engine == "graph_lstm_dro":

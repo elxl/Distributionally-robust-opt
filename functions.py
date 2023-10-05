@@ -109,7 +109,7 @@ def matching(vehicles, demands):
     m = gb.Model("matching")
     m.setParam('OutputFlag', 0)
     m.setParam('TimeLimit', 10)
-    m.setParam('MIPGap', 0.01)
+    # m.setParam('MIPGap', 0.01)
 
     # Decision variables
     x = {}
@@ -126,7 +126,7 @@ def matching(vehicles, demands):
     m.addConstrs(gb.quicksum(x[i] for i in dem_dict[dem]) + y[dem] == 1 for dem in dem_dict)
 
     # Objectives
-    m.setObjective(params.big_M * gb.quicksum(y[i] for i in dem_dict)
+    m.setObjective(params.γ * gb.quicksum(y[i] for i in dem_dict)
                     + gb.quicksum(x[i] * pickup_dist[i] for i in pickup_dist), gb.GRB.MINIMIZE)
     m.optimize()
 
